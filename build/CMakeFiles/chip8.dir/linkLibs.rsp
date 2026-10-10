@@ -1,0 +1,1 @@
+ "C:/Users/georg/Downloads/SDL2-devel-2.32.10-mingw/SDL2-2.32.10/x86_64-w64-mingw32/lib/libSDL2.dll.a" -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 
