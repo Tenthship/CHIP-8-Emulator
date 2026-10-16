@@ -6,12 +6,12 @@ class Chip8 {
 private:
     uint8_t registers[16];
     uint8_t memory[4096];
-    uint16_t index;
-    uint16_t pc;
+    uint16_t index = 0;
+    uint16_t pc = 0;
     uint16_t stack[16];
-    uint8_t sp;
-    uint8_t delayTimer;
-    uint8_t soundTimer;
+    uint8_t sp = 0;
+    uint8_t delayTimer = 0;
+    uint8_t soundTimer = 0;
 
     uint16_t opcode;
     const unsigned int START_ADDRESS = 0x200;
@@ -37,10 +37,10 @@ private:
 
 	typedef void (Chip8::*Chip8Func)();
 	Chip8Func table[0xF + 1];
-	Chip8Func table0[0xE + 1];
-	Chip8Func table8[0xE + 1];
-	Chip8Func tableE[0xE + 1];
-	Chip8Func tableF[0x65 + 1];
+	Chip8Func table0[0xF + 1];
+	Chip8Func table8[0xF + 1];
+	Chip8Func tableE[0xF + 1];
+	Chip8Func tableF[0xFF + 1];
 
 
 
@@ -89,6 +89,7 @@ public:
     void TableF();
     void OP_NULL();
     void Cycle();
+    void TickTimers();
 
     uint32_t video[64 * 32];
     uint8_t keypad[16];

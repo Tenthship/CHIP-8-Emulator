@@ -14,9 +14,18 @@ Chip8::Chip8()
 	: randGen(std::chrono::system_clock::now().time_since_epoch().count())
 {
 	pc = START_ADDRESS;
+	for (int i = 0; i < 4096; i++) {
+		memory[i] = 0;
+	}
 	for (int i = 0; i < 80; i++) {
 		memory[FONTSET_START_ADDRESS + i] = fontset[i];
 	}
+	for (int i = 0; i < 16; i++) {
+		registers[i] = 0;
+		stack[i] = 0;
+		keypad[i] = 0;
+	}
+	memset(video, 0, sizeof(video));
 
 	randByte = std::uniform_int_distribution<uint8_t>(0, 255U);
 
@@ -38,7 +47,7 @@ Chip8::Chip8()
 	table[0xE] = &Chip8::TableE;
 	table[0xF] = &Chip8::TableF;
 
-	for (size_t i = 0; i <= 0xE; i++) {
+	for (size_t i = 0; i <= 0xF; i++) {
 		table0[i] = &Chip8::OP_NULL;
 		table8[i] = &Chip8::OP_NULL;
 		tableE[i] = &Chip8::OP_NULL;
@@ -60,7 +69,7 @@ Chip8::Chip8()
 		tableE[0x1] = &Chip8::OP_ExA1;
 		tableE[0xE] = &Chip8::OP_Ex9E;
 
-		for (size_t i = 0; i < 0x65; i++) {
+		for (size_t i = 0; i <= 0xFF; i++) {
 			tableF[i] = &Chip8::OP_NULL;
 		}
 
@@ -102,6 +111,10 @@ void Chip8::OP_NULL()
 void Chip8::LoadROM(const char* filename){
     	// Open the file as a stream of binary and move the file pointer to the end
 	std::ifstream file(filename, std::ios::binary | std::ios::ate);
+	if (!file.is_open()) {
+        std::cerr << "Failed to open ROM: " << filename << "\n";
+        std::exit(EXIT_FAILURE);
+    }
 
 	if (file.is_open())
 	{
@@ -253,22 +266,23 @@ void Chip8::OP_8xy5() {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 
-	if (Vx > Vy) {
+	if (registers[Vx] >= registers[Vy]) {
+		registers[Vx] = registers[Vx] - registers[Vy];
 		registers[0xF] = 1;
 	} else {
+		registers[Vx] = registers[Vx] - registers[Vy];
 		registers[0xF] = 0;
 	}
 
-	registers[Vx] = registers[Vx] - registers[Vy];
+	
 }
 
 // Set Vx = Vx SHR 1
 void Chip8::OP_8xy6() {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
-
 	registers[0xF] = (registers[Vx] & 0x1u);
-
 	registers[Vx] = registers[Vx] >> 1u;
+
 }
 
 
@@ -277,13 +291,15 @@ void Chip8::OP_8xy7() {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 
-	if (registers[Vy] > registers[Vx]) {
+	if (registers[Vy] >= registers[Vx]) {
 		registers[0xF] = 1;
 	} else {
 		registers[0xF] = 0;
 	}
 
 	registers[Vx] = registers[Vy] - registers[Vx];
+
+	
 }
 
 
@@ -292,6 +308,7 @@ void Chip8::OP_8xyE() {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	registers[0xF] = (registers[Vx] & 0x80u) >> 7u;
 	registers[Vx] = (registers[Vx] << 1);
+	
 }
 
 
@@ -349,8 +366,11 @@ void Chip8::OP_Dxyn()
 
 		for (unsigned int col = 0; col < 8; ++col)
 		{
-			uint8_t spritePixel = spriteByte & (0x80u >> col);
-			uint32_t* screenPixel = &video[(yPos + row) * VIDEO_WIDTH + (xPos + col)];
+		if (xPos + col >= VIDEO_WIDTH || yPos + row >= VIDEO_HEIGHT)
+			continue;
+
+		uint8_t spritePixel = spriteByte & (0x80u >> col);
+		uint32_t* screenPixel = &video[(yPos + row) * VIDEO_WIDTH + (xPos + col)];
 
 			// Sprite pixel is on
 			if (spritePixel)
@@ -370,7 +390,7 @@ void Chip8::OP_Dxyn()
 
 // Skip the next instruction if key with the value of Vx is pressed
 void Chip8::OP_Ex9E() {
-	uint8_t Vx = opcode & (0x0F00u) >> 8u;
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	
 	uint8_t key = registers[Vx];
 
@@ -382,7 +402,7 @@ void Chip8::OP_Ex9E() {
 
 // Skip the next instruction if the key with the value of Vx is NOT pressed
 void Chip8::OP_ExA1() {
-	uint8_t Vx = opcode & (0x0F00u) >> 8u;
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
 	uint8_t key = registers[Vx];
 
@@ -393,13 +413,13 @@ void Chip8::OP_ExA1() {
 
 // Set Vx = delay timer value
 void Chip8::OP_Fx07() {
-	uint8_t Vx = opcode & (0x0F00u) >> 8u;
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	registers[Vx] = delayTimer;
 }
 
 // Wait for a key press, store the value of the key in Vx
 void Chip8::OP_Fx0A() {
-	uint8_t Vx = opcode & (0x0F00u >> 8u);
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
 	if (keypad[0])
 	{
@@ -474,7 +494,7 @@ void Chip8::OP_Fx0A() {
 
 // Set delay timer = Vx
 void Chip8::OP_Fx15() {
-	uint8_t Vx = opcode & (0x0F00u) >> 8u;
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
 	delayTimer = registers[Vx];
 }
@@ -482,14 +502,14 @@ void Chip8::OP_Fx15() {
 
 // Set soundTimer = Vx
 void Chip8::OP_Fx18() {
-	uint8_t Vx = opcode & (0x0F00u) >> 8u;
-	soundTimer = Vx;
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	soundTimer = registers[Vx];
 }
 
 
 // Set I = I + Vx
 void Chip8::OP_Fx1E() {
-	uint8_t Vx = opcode & (0x0F00u) >> 8u;
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	index += registers[Vx];
 
 }
@@ -497,7 +517,7 @@ void Chip8::OP_Fx1E() {
 
 // Set I = location of spritefor digit Vx
 void Chip8::OP_Fx29() {
-	uint8_t Vx = opcode & (0x0F00u) >> 8u;
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t digit = registers[Vx];
 
 	index = FONTSET_START_ADDRESS + (5 * digit);
@@ -506,7 +526,7 @@ void Chip8::OP_Fx29() {
 
 // Store BCD representation of Vx in memory locations I, I + 1, I + 2
 void Chip8::OP_Fx33() {
-	uint8_t Vx = opcode & (0x0F00u) >> 8u;
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t val = registers[Vx];
 
 	//342
@@ -528,7 +548,7 @@ void Chip8::OP_Fx55() {
 void Chip8::OP_Fx65() {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	for (uint8_t i = 0; i <= Vx; i++) {
-		registers[i] = memory[index + 1];
+		registers[i] = memory[index + i];
 	}
 }
 
@@ -540,14 +560,24 @@ void Chip8::Cycle() {
 
 	((*this).*(table[(opcode & 0xF000u) >> 12u]))();
 
+	// if (delayTimer > 0) {
+	// 	--delayTimer;
+	// }
+
+	// if (soundTimer > 0) {
+	// 	--soundTimer;
+	// }
+
+}
+
+void Chip8::TickTimers() {
 	if (delayTimer > 0) {
-		--delayTimer;
+		delayTimer--;
 	}
 
 	if (soundTimer > 0) {
-		--soundTimer;
+		soundTimer--;
 	}
-
 }
 
 class Platform
@@ -804,6 +834,7 @@ int main(int argc, char* argv[])
 	int videoPitch = sizeof(chip8.video[0]) * VIDEO_WIDTH;
 
 	auto lastCycleTime = std::chrono::high_resolution_clock::now();
+	auto lastTimerTime = lastCycleTime;
 	bool quit = false;
 
 	while (!quit)
@@ -812,6 +843,14 @@ int main(int argc, char* argv[])
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		float dt = std::chrono::duration<float, std::chrono::milliseconds::period>(currentTime - lastCycleTime).count();
+
+		float timerDt = std::chrono::duration<float, std::chrono::milliseconds::period>(currentTime - lastTimerTime).count();
+
+		if (timerDt >= 1000.0f / 60.0f)
+		{
+			chip8.TickTimers();
+			lastTimerTime = currentTime;
+		}
 
 		if (dt > cycleDelay)
 		{
