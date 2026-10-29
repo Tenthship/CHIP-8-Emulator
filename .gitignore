@@ -1,0 +1,10 @@
+# Build output
+build/
+
+# Compiled files
+*.exe
+*.o
+*.obj
+
+# Local editor settings
+.vscode/
